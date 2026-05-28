@@ -31,12 +31,12 @@ En una celda, ejecuta:
 
 ### Paso 3: Subir el archivo
 1. Haz clic en el icono 📁 (Archivos) en el panel lateral izquierdo
-2. Sube el archivo `sistema_academico_tareas.py`
+2. Sube el archivo `sistema_academico_tareas4.py`
 
 ### Paso 4: Ejecutar
 En una nueva celda, ejecuta:
 ```python
-exec(open('sistema_academico_tareas2.py').read())
+exec(open('sistema_academico_tareas4.py').read())
 ```
 
 ---
