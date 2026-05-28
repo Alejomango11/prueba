@@ -252,9 +252,24 @@ class GoogleCalendarSync:
             print("   Se abrirá un enlace para autorizar el acceso.")
             print("   Asegúrate de conceder permisos para modificar tu calendario.\n")
 
-            # Autenticar con los scopes específicos de Calendar
-            auth.authenticate_user(scopes=self.SCOPES)
-            creds, _ = default(scopes=self.SCOPES)
+            # En Google Colab, usar el flujo de autenticación estándar
+            # que maneja los scopes automáticamente
+            auth.authenticate_user()
+
+            # Obtener credenciales con los scopes de Calendar
+            # Después de autenticar, default() obtiene las credenciales con los scopes correctos
+            creds, _ = default()
+
+            # Verificar si tenemos los scopes necesarios
+            if creds and creds.scopes:
+                if not any('calendar' in scope for scope in creds.scopes):
+                    Colores.print_colored("\n⚠️  Las credenciales no tienen permisos de Calendar.", Colores.YELLOW)
+                    print("   Por favor, revoca el acceso previo y vuelve a autenticar:")
+                    print("   1. Ve a: https://myaccount.google.com/permissions")
+                    print("   2. Busca 'Google Colab' y haz clic en 'Quitar acceso'")
+                    print("   3. Vuelve a ejecutar esta opción")
+                    return False
+
             self.service = build('calendar', 'v3', credentials=creds)
             self.autenticado = True
             Colores.print_colored("✅ ¡Autenticación exitosa!", Colores.GREEN)
@@ -265,6 +280,7 @@ class GoogleCalendarSync:
             print("\n⚠️  Si el error persiste, verifica que:")
             print("   1. Has habilitado Google Calendar API en tu proyecto de Google Cloud")
             print("   2. Concediste los permisos de 'Ver y editar eventos' en el calendario")
+            print("   3. Has revocado accesos previos en: https://myaccount.google.com/permissions")
             return False
 
     def crear_evento(self, tarea: Tarea) -> Optional[str]:
