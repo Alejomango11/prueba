@@ -10,7 +10,11 @@
       "Bash(git commit -m 'Agrega aplicación web con integración Google Calendar *)",
       "Bash(git commit -m 'Sistema Académico de Administración de Tareas v2.0 *)",
       "Bash(gh --version)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git commit -m 'Corrige error de permisos en Google Calendar API *)"
     ]
   }
 }

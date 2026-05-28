@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Sistema Académico de Administración de Tareas
-=============================================
+Sistema Académico de Administración de Tareas - Versión 2
+==========================================================
 Aplicación completa para gestionar tareas académicas con funcionalidades de:
 - CRUD de tareas (Crear, Leer, Actualizar, Eliminar)
 - Persistencia en JSON
@@ -13,8 +13,10 @@ Aplicación completa para gestionar tareas académicas con funcionalidades de:
 
 Diseñado específicamente para funcionar en Google Colab.
 
+Archivo: sistema_academico_tareas2.py
 Autor: Proyecto Académico
-Versión: 2.0
+Versión: 2.1
+Fecha: Mayo 2026
 """
 
 # =============================================================================

@@ -36,7 +36,7 @@ En una celda, ejecuta:
 ### Paso 4: Ejecutar
 En una nueva celda, ejecuta:
 ```python
-exec(open('sistema_academico_tareas.py').read())
+exec(open('sistema_academico_tareas2.py').read())
 ```
 
 ---
