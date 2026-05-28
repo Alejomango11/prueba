@@ -1,91 +1,42 @@
 # 📚 Sistema Académico de Administración de Tareas
 
-Aplicación completa en Python para gestionar tareas académicas con integración a **Google Calendar**.
-
-## ✨ Características Principales
-
-- ✅ **CRUD Completo**: Agregar, ver, completar y eliminar tareas
-- 💾 **Persistencia**: Almacenamiento automático en archivo JSON
-- 📅 **Google Calendar**: Sincronización automática de tareas con tu calendario
-- 🔔 **Alertas Inteligentes**: Notificaciones de tareas próximas a vencer
-- 📊 **Estadísticas**: Métricas de productividad y conteo por prioridad
-- 🔒 **Validaciones**: Manejo robusto de errores con try/except
-- 🎨 **Interfaz Web**: Panel de control moderno y responsive
-- 💻 **Google Colab**: Versión especial para Colab con autenticación integrada
+Aplicación completa en Python para gestionar tareas académicas con integración a **Google Calendar**. Diseñada específicamente para funcionar en **Google Colab**.
 
 ---
 
-## 🚀 Opciones de Uso
+## ✨ Características
 
-### Opción 1: Google Colab (Recomendado para principiantes)
+- ✅ **CRUD Completo**: Crear, leer, actualizar y eliminar tareas
+- 💾 **Persistencia**: Guardado automático en archivo JSON
+- 📅 **Google Calendar**: Sincronización automática de tareas con tu calendario
+- 🔔 **Alertas**: Notificaciones de tareas vencidas y próximas a vencer
+- 📊 **Estadísticas**: Métricas de productividad con gráficos de barras
+- 🔍 **Búsqueda y Filtros**: Filtrar por estado, prioridad o buscar por nombre
+- 🎨 **Interfaz Amigable**: Colores, emojis y diseño limpio en consola
+- 🔒 **Validaciones**: Manejo robusto de errores sin cerrar el programa
 
-#### Paso 1: Instalar dependencias
+---
+
+## 🚀 Cómo usar en Google Colab
+
+### Paso 1: Abrir Google Colab
+1. Ve a [Google Colab](https://colab.research.google.com/)
+2. Crea un **nuevo notebook**
+
+### Paso 2: Instalar dependencias
+En una celda, ejecuta:
 ```python
 !pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client
 ```
 
-#### Paso 2: Copiar y ejecutar el script
-1. Abre [Google Colab](https://colab.research.google.com/)
-2. Sube el archivo `sistema_academico_tareas_colab.py`
-3. Ejecuta: `exec(open('sistema_academico_tareas_colab.py').read())`
+### Paso 3: Subir el archivo
+1. Haz clic en el icono 📁 (Archivos) en el panel lateral izquierdo
+2. Sube el archivo `sistema_academico_tareas.py`
 
-#### Paso 3: Autenticar con Google
-- La primera vez que sincronices con Calendar, se te pedirá autorización
-- Sigue los pasos de autenticación en el navegador
-- ¡Listo! Tus tareas se sincronizarán automáticamente
-
----
-
-### Opción 2: Aplicación Web (Flask)
-
-#### Requisitos previos
-- Python 3.8+
-- Cuenta de Google Cloud Platform (para Calendar API)
-
-#### Instalación local
-```bash
-# Clonar repositorio
-git clone https://github.com/Alejomango11/proyecto-final.git
-cd proyecto-final
-
-# Instalar dependencias
-pip install -r requirements.txt
-
-# Configurar Google Calendar API (ver instrucciones abajo)
-# Copiar client_secrets.json al directorio del proyecto
-
-# Ejecutar aplicación
-python app.py
-```
-
-#### Configuración de Google Calendar API
-1. Ve a [Google Cloud Console](https://console.cloud.google.com/)
-2. Crea un nuevo proyecto (o usa uno existente)
-3. Habilita la **Google Calendar API**:
-   - APIs y servicios > Biblioteca
-   - Buscar "Google Calendar API"
-   - Click en "Habilitar"
-4. Crea credenciales OAuth2:
-   - APIs y servicios > Credenciales
-   - Crear credenciales > ID de cliente OAuth
-   - Tipo de aplicación: "Aplicación web"
-   - Orígenes autorizados: `http://localhost:5000`
-   - URIs de redirección: `http://localhost:5000/calendar/oauth2callback`
-5. Descarga el archivo JSON y renómbralo a `client_secrets.json`
-6. Colócalo en la raíz del proyecto
-
-#### Uso de la aplicación web
-```bash
-python app.py
-```
-Abre tu navegador en: `http://localhost:5000`
-
----
-
-### Opción 3: Versión Consola (Local)
-
-```bash
-python sistema_academico_tareas.py
+### Paso 4: Ejecutar
+En una nueva celda, ejecuta:
+```python
+exec(open('sistema_academico_tareas.py').read())
 ```
 
 ---
@@ -94,41 +45,43 @@ python sistema_academico_tareas.py
 
 | Opción | Descripción |
 |--------|-------------|
-| 1 | ➕ Agregar nueva tarea |
-| 2 | 📋 Ver todas las tareas |
-| 3 | ✔️ Marcar tarea como completada |
-| 4 | 🗑️ Eliminar tarea |
-| 5 | 📅 Ver tareas ordenadas por fecha |
-| 6 | 🚨 Mostrar alertas de vencimiento |
-| 7 | 📊 Ver estadísticas |
-| 8 | 🔗 Conectar Google Calendar (Colab) |
-| 9 | 🚪 Salir y guardar |
-
----
-
-## 📝 Formato de Datos
-
-- **Fecha de entrega**: `YYYY-MM-DD` (ejemplo: `2024-12-31`)
-- **Prioridades**: `alta`, `media` o `baja`
-- **Estados**: `pendiente` o `completada`
+| **1** | ➕ Agregar nueva tarea |
+| **2** | 📋 Ver tareas (con submenú de filtros) |
+| **3** | ✔️ Marcar tarea como completada |
+| **4** | 🗑️ Eliminar tarea |
+| **5** | 📅 Ordenar tareas por fecha de entrega |
+| **6** | 🚨 Mostrar alertas de vencimiento |
+| **7** | 📊 Ver estadísticas de productividad |
+| **8** | 📅 Sincronizar con Google Calendar |
+| **9** | 🚪 Salir y guardar |
 
 ---
 
 ## 📅 Integración con Google Calendar
 
+### Configuración
+La primera vez que uses la sincronización:
+
+1. Selecciona la **opción 8** del menú
+2. Elige **"Autenticar con Google"**
+3. Se abrirá un enlace de autorización
+4. Inicia sesión con tu cuenta de Google
+5. Copia el código de autorización y pégalo en Colab
+6. ¡Listo! Tus credenciales se guardarán para futuras sesiones
+
 ### ¿Qué se sincroniza?
-- ✅ Eventos de todo el día en tu calendario principal
-- ✅ Recordatorios automáticos (1 día antes por email, 1 hora antes popup)
-- ✅ Códigos de color según prioridad:
+- ✅ Eventos de **todo el día** en tu calendario principal
+- ✅ **Recordatorios automáticos**:
+  - Email: 1 día antes
+  - Notificación popup: 1 hora antes
+- ✅ **Códigos de color** según prioridad:
   - 🔴 **Alta**: Rojo
   - 🟡 **Media**: Amarillo
   - 🟢 **Baja**: Verde
 
-### ¿Cómo funciona?
-1. Al agregar una tarea, marca la opción "Sincronizar con Google Calendar"
-2. El evento se crea automáticamente en tu calendario
-3. Al eliminar una tarea, el evento también se elimina
-4. Puedes desconectar Google Calendar en cualquier momento
+### Cómo sincronizar
+- **Al agregar tarea**: Responde "s" cuando pregunte "¿Sincronizar con Google Calendar?"
+- **Tareas existentes**: Opción 8 → "Sincronizar todas las tareas pendientes"
 
 ---
 
@@ -136,13 +89,13 @@ python sistema_academico_tareas.py
 
 El sistema muestra alertas para:
 - 🔴 **Tareas vencidas** que siguen pendientes
-- 🟠 **Tareas que vencen hoy**
+- 🔴 **Tareas que vencen hoy**
+- 🟠 **Tareas que vencen mañana**
 - 🟡 **Tareas que vencen en los próximos 3 días**
 
 Las alertas se muestran:
-- Al iniciar el programa
-- En el panel de alertas (versión web)
-- Al solicitarlas explícitamente (opción 6)
+- **Al iniciar** el programa
+- **Al solicitarlas** (opción 6)
 
 ---
 
@@ -150,150 +103,213 @@ Las alertas se muestran:
 
 El sistema calcula automáticamente:
 - **Total de tareas**
-- **Tareas completadas**
-- **Tareas pendientes**
+- **Tareas completadas** ✅
+- **Tareas pendientes** ⏳
 - **Porcentaje de productividad** (completadas / total × 100)
-- **Distribución por prioridad**
+- **Distribución por prioridad** (alta/media/baja)
+
+**Visualización**: Barra de progreso con colores según productividad:
+- 🟢 ≥ 70%: Excelente
+- 🟡 40-69%: Regular
+- 🔴 < 40%: Necesita mejorar
 
 ---
 
-## 🔒 Validaciones Implementadas
+## 🔍 Filtros y Búsqueda
 
-- ✅ Formato de fecha `YYYY-MM-DD`
-- ✅ Prioridad válida (`alta`, `media`, `baja`)
-- ✅ Número de tarea existente
-- ✅ Opción de menú numérica válida
-- ✅ Todos los errores muestran mensajes claros sin cerrar el programa
+Desde la **opción 2**, puedes:
+- Ver **todas** las tareas
+- Filtrar por **pendientes** o **completadas**
+- Filtrar por **prioridad** (alta/media/baja)
+- **Buscar** por nombre (búsqueda parcial, sin distinguir mayúsculas)
 
 ---
 
-## 📁 Estructura del Proyecto
+## 📝 Formato de Datos
 
-```
-proyecto-final/
-├── app.py                              # Aplicación web Flask
-├── sistema_academico_tareas.py         # Versión consola (local)
-├── sistema_academico_tareas_colab.py   # Versión Google Colab
-├── requirements.txt                    # Dependencias
-├── client_secrets.json.example         # Ejemplo de configuración OAuth
-├── tareas.json                         # Almacenamiento de tareas (local)
-├── tareas_web.json                     # Almacenamiento de tareas (web)
-├── README.md                           # Este archivo
-├── templates/
-│   └── index.html                      # Interfaz web
-├── static/
-│   ├── css/
-│   │   └── style.css                   # Estilos CSS
-│   └── js/
-│       └── app.js                      # JavaScript frontend
-```
+### Fecha
+- Formato: `YYYY-MM-DD`
+- Ejemplo: `2024-12-31`
+
+### Prioridad
+- Opciones: `alta`, `media`, `baja`
+- Se muestran con colores:
+  - 🔴 Alta
+  - 🟡 Media
+  - 🟢 Baja
+
+### Estado
+- `pendiente` ⏳
+- `completada` ✅
 
 ---
 
 ## 🛠️ Estructura del Código
 
 ```
-Clase Tarea
-├── Constructor y atributos
-├── Getters y Setters
-├── Método __str__ para formateo
-└── Métodos de serialización JSON
-
-Clase GoogleCalendarSync (Colab) / GoogleCalendarManager (Web)
-├── Autenticación OAuth2
-├── Crear evento
-├── Eliminar evento
-└── Actualizar evento
-
-Clase SistemaTareas
-├── Persistencia (cargar/guardar JSON)
-├── Validaciones (fecha, prioridad, índices)
-├── Operaciones CRUD con sincronización
-├── Consultas y estadísticas
-└── Alertas de vencimiento
+sistema_academico_tareas.py
+│
+├── Clase Colores
+│   └── Manejo de colores ANSI para consola
+│
+├── Clase Tarea
+│   ├── Atributos: nombre, fecha, prioridad, estado, google_event_id
+│   ├── Getters y Setters
+│   ├── __str__ (representación en string)
+│   ├── to_dict (serialización JSON)
+│   └── from_dict (deserialización)
+│
+├── Clase GoogleCalendarSync
+│   ├── autenticar()
+│   ├── crear_evento()
+│   └── eliminar_evento()
+│
+├── Clase SistemaAcademico
+│   ├── Persistencia (cargar/guardar JSON)
+│   ├── Validaciones (fecha, prioridad, índices)
+│   ├── CRUD (agregar, ver, completar, eliminar)
+│   ├── Búsqueda y filtros
+│   ├── Ordenamiento por fecha
+│   ├── Alertas de vencimiento
+│   ├── Estadísticas
+│   └── Sincronización con Calendar
+│
+└── Funciones de Interfaz
+    ├── mostrar_banner()
+    ├── mostrar_menu()
+    ├── submenu_filtros()
+    └── main()
 ```
 
 ---
 
-## 🗄️ Almacenamiento
+## 💾 Persistencia
 
-Las tareas se guardan automáticamente en formato JSON:
+Las tareas se guardan automáticamente en:
+- **Google Colab**: `/content/tareas.json`
+- **Local**: `tareas.json` en el mismo directorio
 
-```json
-[
-  {
-    "nombre": "Entregar proyecto de Python",
-    "fecha_entrega": "2024-06-15",
-    "prioridad": "alta",
-    "estado": "pendiente",
-    "google_event_id": "abc123xyz"
-  }
-]
+**IMPORTANTE para Colab**:
+- Los archivos en `/content/` se borran al cerrar la sesión
+- Para conservar tus tareas, descarga el archivo antes de cerrar:
+  ```python
+  from google.colab import files
+  files.download('/content/tareas.json')
+  ```
+- En tu próxima sesión, sube el archivo antes de ejecutar el programa
+
+---
+
+## 📄 Ejemplo de Uso
+
+```
+📚 SISTEMA ACADÉMICO DE TAREAS
+              con Google Calendar Sync
+
+✓ Se cargaron 3 tarea(s)
+
+⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
+   🔔 NOTIFICACIONES:
+   🔴 1 tarea(s) VENCIDA(S)!
+   🟡 2 tarea(s) próximas a vencer
+⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
+
+============================================================
+📋 MENÚ PRINCIPAL
+============================================================
+
+   [1] ➕  Agregar nueva tarea
+   [2] 📋 Ver todas las tareas
+   [3] ✔️   Marcar tarea como completada
+   [4] 🗑️   Eliminar tarea
+   [5] 📅 Ordenar tareas por fecha
+   [6] 🚨 Mostrar alertas de vencimiento
+   [7] 📊 Ver estadísticas
+   [8] 📅 Sincronizar con Google Calendar
+   [9] 🚪 Salir y guardar
+
+============================================================
+
+👉 Seleccione una opción (1-9):
 ```
 
 ---
 
-## 🎨 Capturas de Pantalla
+## 🔒 Validaciones
 
-### Versión Web
-- **Dashboard**: Estadísticas en tiempo real
-- **Lista de tareas**: Visualización con indicadores de prioridad
-- **Formulario**: Agregar tareas con sincronización opcional
-- **Alertas**: Panel de notificaciones de vencimiento
+El sistema valida mediante excepciones:
 
-### Versión Colab
-- Interfaz de consola interactiva
-- Autenticación integrada con Google
-- Mensajes claros con emojis
+| Validación | Comportamiento |
+|------------|----------------|
+| Fecha vacía o incorrecta | Mensaje: "La fecha debe tener el formato YYYY-MM-DD" |
+| Prioridad inválida | Mensaje: 'La prioridad debe ser "alta", "media" o "baja"' |
+| Número de tarea inexistente | Mensaje: "La tarea #X no existe" |
+| Opción de menú inválida | Mensaje: "Opción inválida. Usa 1-9." |
+| Entrada no numérica donde se espera número | Mensaje: "Debes ingresar un número válido" |
+
+**Todas las validaciones**:
+- Muestran mensajes claros
+- **NO cierran el programa**
+- Permiten reintentar
 
 ---
 
-## ⚠️ Notas Importantes
+## ⚙️ Requisitos Técnicos
 
-### Seguridad
-- El archivo `client_secrets.json` contiene credenciales sensibles
-- **NUNCA** lo subas a GitHub (está en .gitignore)
-- El token de autenticación se guarda en `token.pickle` (también en .gitignore)
+### Dependencias
+```
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+```
 
-### Límites de Google Calendar API
-- Límite de 1,000,000 de consultas por día (cuota gratuita)
-- Para uso personal, es más que suficiente
-
-### Compatibilidad
-- ✅ Google Colab
-- ✅ Python 3.8+
-- ✅ Navegadores modernos (Chrome, Firefox, Safari, Edge)
-- ✅ Windows, macOS, Linux
+### Python
+- Versión 3.7 o superior
+- Compatible con Google Colab
 
 ---
 
 ## 🆘 Solución de Problemas
 
-### Error: "Archivo client_secrets.json no encontrado"
-**Solución**: Sigue las instrucciones de configuración de Google Calendar API arriba.
-
-### Error: "Error de autenticación con Google"
-**Solución**: 
-1. Elimina el archivo `token.pickle`
-2. Vuelve a intentar la autenticación
-3. Asegúrate de habilitar Google Calendar API en tu proyecto
-
-### Error: "No module named 'google'"
+### "ModuleNotFoundError: No module named 'google'"
 **Solución**: Instala las dependencias:
-```bash
-pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client
+```python
+!pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client
 ```
 
-### Las tareas no se guardan en Colab
-**Solución**: En Colab, descarga manualmente el archivo `tareas.json` antes de cerrar la sesión:
+### "Error de autenticación con Google"
+**Solución**:
+1. Asegúrate de tener conexión a internet
+2. Intenta autenticar de nuevo (opción 8)
+3. Si persiste, reinicia el runtime de Colab: **Runtime → Restart runtime**
+
+### Las tareas no se guardan entre sesiones
+**Solución**: Recuerda descargar `tareas.json` antes de cerrar Colab:
 ```python
 from google.colab import files
 files.download('/content/tareas.json')
 ```
 
+### Error al sincronizar con Calendar
+**Solución**:
+1. Verifica que estés autenticado (opción 8 → opción 1)
+2. Asegúrate de habilitar Google Calendar API en tu cuenta Google
+3. Intenta sincronizar tareas individuales al agregarlas
+
 ---
 
-## 📄 Licencia
+## 🎨 Características Visuales
+
+- **Colores ANSI** para mejor legibilidad
+- **Emojis** para identificar rápidamente estados y prioridades
+- **Banners y separadores** visuales
+- **Barras de progreso** en estadísticas
+- **Tablas alineadas** en el menú
+
+---
+
+## 📝 Licencia
 
 Proyecto académico desarrollado con fines educativos.
 
@@ -305,13 +321,4 @@ Desarrollado como proyecto final de programación en Python.
 
 ---
 
-## 🙏 Agradecimientos
-
-- Google Calendar API por la integración de calendario
-- Flask por el framework web
-- Font Awesome por los iconos
-
----
-
-**¿Preguntas o problemas?** 
-Abre un issue en el repositorio o revisa la documentación de [Google Calendar API](https://developers.google.com/calendar/api/guides/overview).
+**¡Gracias por usar el Sistema Académico de Tareas! 📚✨**

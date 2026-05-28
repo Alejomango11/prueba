@@ -4,18 +4,63 @@
 Sistema Académico de Administración de Tareas
 =============================================
 Aplicación completa para gestionar tareas académicas con funcionalidades de:
-- Agregar, ver, completar y eliminar tareas
-- Almacenamiento persistente en JSON
+- CRUD de tareas (Crear, Leer, Actualizar, Eliminar)
+- Persistencia en JSON
+- Integración con Google Calendar API
 - Alertas de vencimiento
 - Estadísticas de productividad
+- Búsqueda y filtros
 
-Compatible con Google Colab y entornos locales de Python.
+Diseñado específicamente para funcionar en Google Colab.
+
+Autor: Proyecto Académico
+Versión: 2.0
 """
 
+# =============================================================================
+# IMPORTACIONES
+# =============================================================================
 import json
 import os
+import re
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+
+# Importaciones para Google Calendar (con manejo de error si no están instaladas)
+try:
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import Flow
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+    from google.colab import auth
+    from google.auth import default
+    GOOGLE_CALENDAR_AVAILABLE = True
+except ImportError:
+    GOOGLE_CALENDAR_AVAILABLE = False
+    print("⚠️  Nota: Para usar Google Calendar, instala las dependencias:")
+    print("   !pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client")
+
+
+# =============================================================================
+# COLORES PARA CONSOLA (ANSI)
+# =============================================================================
+class Colores:
+    """Clase para manejar colores en la consola."""
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    END = '\033[0m'
+
+    @staticmethod
+    def print_colored(texto: str, color: str) -> None:
+        """Imprime texto con color."""
+        print(f"{color}{texto}{Colores.END}")
 
 
 # =============================================================================
@@ -24,9 +69,17 @@ from typing import List, Optional
 class Tarea:
     """
     Representa una tarea académica con sus atributos y métodos asociados.
+
+    Atributos:
+        _nombre: Nombre/descripción de la tarea
+        _fecha_entrega: Fecha límite en formato YYYY-MM-DD
+        _prioridad: Nivel de prioridad (alta, media, baja)
+        _estado: Estado actual (pendiente o completada)
+        _google_event_id: ID del evento en Google Calendar (opcional)
     """
 
-    def __init__(self, nombre: str, fecha_entrega: str, prioridad: str, estado: str = "pendiente"):
+    def __init__(self, nombre: str, fecha_entrega: str, prioridad: str,
+                 estado: str = "pendiente", google_event_id: str = None):
         """
         Constructor de la clase Tarea.
 
@@ -35,11 +88,13 @@ class Tarea:
             fecha_entrega: Fecha límite en formato YYYY-MM-DD
             prioridad: Nivel de prioridad ("alta", "media" o "baja")
             estado: Estado de la tarea ("pendiente" o "completada")
+            google_event_id: ID del evento en Google Calendar (opcional)
         """
         self._nombre = nombre
         self._fecha_entrega = fecha_entrega
         self._prioridad = prioridad.lower()
         self._estado = estado.lower()
+        self._google_event_id = google_event_id
 
     # -------------------------------------------------------------------------
     # GETTERS (Métodos de acceso)
@@ -60,6 +115,10 @@ class Tarea:
         """Retorna el estado de la tarea."""
         return self._estado
 
+    def get_google_event_id(self) -> Optional[str]:
+        """Retorna el ID del evento en Google Calendar."""
+        return self._google_event_id
+
     # -------------------------------------------------------------------------
     # SETTERS (Métodos de modificación)
     # -------------------------------------------------------------------------
@@ -79,8 +138,12 @@ class Tarea:
         """Modifica el estado de la tarea."""
         self._estado = estado.lower()
 
+    def set_google_event_id(self, event_id: str) -> None:
+        """Establece el ID del evento en Google Calendar."""
+        self._google_event_id = event_id
+
     # -------------------------------------------------------------------------
-    # MÉTODOS ADICIONALES
+    # MÉTODOS ESPECIALES
     # -------------------------------------------------------------------------
     def __str__(self) -> str:
         """
@@ -89,21 +152,31 @@ class Tarea:
         Returns:
             String con los datos de la tarea formateados para mostrar
         """
-        # Determinar icono según prioridad
+        # Iconos según prioridad
         icono_prioridad = {
             "alta": "🔴",
             "media": "🟡",
             "baja": "🟢"
         }.get(self._prioridad, "⚪")
 
-        # Determinar icono según estado
+        # Icono según estado
         icono_estado = "✅" if self._estado == "completada" else "⏳"
 
-        return (f"{icono_prioridad} {self._nombre}\n"
-                f"   📅 Fecha de entrega: {self._fecha_entrega}\n"
+        # Icono de sincronización
+        icono_sync = " 📅" if self._google_event_id else ""
+
+        return (f"{icono_prioridad} {self._nombre}{icono_sync}\n"
+                f"   📅 Fecha: {self._fecha_entrega}\n"
                 f"   🏷️  Prioridad: {self._prioridad.upper()}\n"
                 f"   {icono_estado} Estado: {self._estado.upper()}")
 
+    def __repr__(self) -> str:
+        """Representación oficial de la tarea."""
+        return f"Tarea('{self._nombre}', '{self._fecha_entrega}', '{self._prioridad}', '{self._estado}')"
+
+    # -------------------------------------------------------------------------
+    # MÉTODOS DE SERIALIZACIÓN
+    # -------------------------------------------------------------------------
     def to_dict(self) -> dict:
         """
         Convierte la tarea a un diccionario para serialización JSON.
@@ -115,7 +188,8 @@ class Tarea:
             "nombre": self._nombre,
             "fecha_entrega": self._fecha_entrega,
             "prioridad": self._prioridad,
-            "estado": self._estado
+            "estado": self._estado,
+            "google_event_id": self._google_event_id
         }
 
     @classmethod
@@ -133,29 +207,148 @@ class Tarea:
             nombre=datos["nombre"],
             fecha_entrega=datos["fecha_entrega"],
             prioridad=datos["prioridad"],
-            estado=datos.get("estado", "pendiente")
+            estado=datos.get("estado", "pendiente"),
+            google_event_id=datos.get("google_event_id")
         )
 
 
 # =============================================================================
-# CLASE DE GESTIÓN: SISTEMA DE TAREAS
+# INTEGRACIÓN CON GOOGLE CALENDAR
 # =============================================================================
-class SistemaTareas:
+class GoogleCalendarSync:
     """
-    Sistema principal que gestiona la colección de tareas y su persistencia.
-    """
+    Gestiona la sincronización de tareas con Google Calendar.
 
-    ARCHIVO_TAREAS = "tareas.json"
+    Permite crear, actualizar y eliminar eventos en Google Calendar
+    asociados a las tareas del sistema.
+    """
 
     def __init__(self):
+        """Inicializa el gestor de sincronización."""
+        self.service = None
+        self.autenticado = False
+
+    def autenticar(self) -> bool:
         """
-        Constructor del sistema. Carga las tareas existentes del archivo JSON.
+        Autentica con Google Calendar usando las credenciales de Colab.
+
+        Returns:
+            True si la autenticación fue exitosa, False en caso contrario
         """
+        if not GOOGLE_CALENDAR_AVAILABLE:
+            Colores.print_colored("\n❌ Error: Las librerías de Google no están instaladas.", Colores.RED)
+            print("   Ejecuta primero:")
+            print("   !pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client")
+            return False
+
+        try:
+            Colores.print_colored("\n🔐 Autenticando con Google Calendar...", Colores.CYAN)
+            auth.authenticate_user()
+            creds, _ = default()
+            self.service = build('calendar', 'v3', credentials=creds)
+            self.autenticado = True
+            Colores.print_colored("✅ ¡Autenticación exitosa!", Colores.GREEN)
+            return True
+        except Exception as e:
+            Colores.print_colored(f"\n❌ Error de autenticación: {e}", Colores.RED)
+            return False
+
+    def crear_evento(self, tarea: Tarea) -> Optional[str]:
+        """
+        Crea un evento en Google Calendar para una tarea.
+
+        Args:
+            tarea: Instancia de Tarea a sincronizar
+
+        Returns:
+            ID del evento creado o None si falla
+        """
+        if not self.autenticado or not self.service:
+            Colores.print_colored("⚠️  No hay conexión con Google Calendar", Colores.YELLOW)
+            return None
+
+        try:
+            # Asignar color según prioridad
+            color_id = {
+                'alta': '11',   # Rojo
+                'media': '5',   # Amarillo
+                'baja': '2'     # Verde
+            }.get(tarea.get_prioridad(), '1')
+
+            evento = {
+                'summary': f"📚 {tarea.get_nombre()}",
+                'description': f"Tarea académica - Prioridad: {tarea.get_prioridad().upper()}",
+                'start': {
+                    'date': tarea.get_fecha_entrega(),
+                    'timeZone': 'America/Mexico_City',
+                },
+                'end': {
+                    'date': tarea.get_fecha_entrega(),
+                    'timeZone': 'America/Mexico_City',
+                },
+                'reminders': {
+                    'useDefault': False,
+                    'overrides': [
+                        {'method': 'email', 'minutes': 24 * 60},  # 1 día antes
+                        {'method': 'popup', 'minutes': 60},       # 1 hora antes
+                    ],
+                },
+                'colorId': color_id,
+            }
+
+            resultado = self.service.events().insert(calendarId='primary', body=evento).execute()
+            Colores.print_colored(f"✅ Evento creado en Google Calendar", Colores.GREEN)
+            return resultado.get('id')
+
+        except HttpError as e:
+            Colores.print_colored(f"❌ Error al crear evento: {e}", Colores.RED)
+            return None
+        except Exception as e:
+            Colores.print_colored(f"❌ Error inesperado: {e}", Colores.RED)
+            return None
+
+    def eliminar_evento(self, event_id: str) -> bool:
+        """
+        Elimina un evento de Google Calendar.
+
+        Args:
+            event_id: ID del evento a eliminar
+
+        Returns:
+            True si se eliminó correctamente, False en caso contrario
+        """
+        if not self.autenticado or not self.service or not event_id:
+            return False
+
+        try:
+            self.service.events().delete(calendarId='primary', eventId=event_id).execute()
+            return True
+        except Exception as e:
+            print(f"⚠️  Error al eliminar evento: {e}")
+            return False
+
+
+# =============================================================================
+# SISTEMA PRINCIPAL
+# =============================================================================
+class SistemaAcademico:
+    """
+    Sistema principal de administración de tareas.
+
+    Gestiona la colección de tareas, su persistencia en JSON,
+    la interfaz de usuario y la sincronización con Google Calendar.
+    """
+
+    ARCHIVO_TAREAS = "/content/tareas.json"
+
+    def __init__(self):
+        """Inicializa el sistema, cargando las tareas existentes."""
         self._tareas: List[Tarea] = []
+        self._calendar = GoogleCalendarSync()
         self.cargar_tareas()
 
     # -------------------------------------------------------------------------
-    # MÉTODOS DE PERSISTENCIA (ALMACENAMIENTO JSON)
+    # PERSISTENCIA
     # -------------------------------------------------------------------------
     def cargar_tareas(self) -> None:
         """
@@ -167,26 +360,23 @@ class SistemaTareas:
                 with open(self.ARCHIVO_TAREAS, 'r', encoding='utf-8') as archivo:
                     datos = json.load(archivo)
                     self._tareas = [Tarea.from_dict(t) for t in datos]
-                print(f"✓ Se cargaron {len(self._tareas)} tarea(s) desde el archivo.")
+                Colores.print_colored(f"✓ Se cargaron {len(self._tareas)} tarea(s)", Colores.GREEN)
             else:
-                print("✓ No se encontró archivo de tareas. Se creará uno nuevo.")
+                print("✓ No hay tareas previas. Comenzando con lista vacía.")
         except json.JSONDecodeError:
-            print("⚠️  Advertencia: El archivo de tareas está corrupto. Se inicia con lista vacía.")
+            Colores.print_colored("⚠️  El archivo de tareas está corrupto. Se inicia con lista vacía.", Colores.YELLOW)
             self._tareas = []
         except Exception as e:
-            print(f"⚠️  Error al cargar tareas: {e}")
+            Colores.print_colored(f"⚠️  Error al cargar: {e}", Colores.YELLOW)
             self._tareas = []
 
     def guardar_tareas(self) -> None:
-        """
-        Guarda todas las tareas en el archivo JSON.
-        Se ejecuta automáticamente al salir del programa.
-        """
+        """Guarda todas las tareas en el archivo JSON."""
         try:
             with open(self.ARCHIVO_TAREAS, 'w', encoding='utf-8') as archivo:
                 json.dump([t.to_dict() for t in self._tareas], archivo, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"❌ Error al guardar tareas: {e}")
+            Colores.print_colored(f"❌ Error al guardar: {e}", Colores.RED)
 
     # -------------------------------------------------------------------------
     # VALIDACIONES
@@ -221,7 +411,7 @@ class SistemaTareas:
         """
         return prioridad.lower() in ["alta", "media", "baja"]
 
-    def validar_indice_tarea(self, indice: int) -> bool:
+    def validar_indice(self, indice: int) -> bool:
         """
         Valida que el índice de tarea exista en la lista.
 
@@ -234,159 +424,195 @@ class SistemaTareas:
         return 1 <= indice <= len(self._tareas)
 
     # -------------------------------------------------------------------------
-    # FUNCIONALIDADES CRUD
+    # OPERACIONES CRUD
     # -------------------------------------------------------------------------
-    def agregar_tarea(self, nombre: str, fecha_entrega: str, prioridad: str) -> None:
+    def agregar_tarea(self, nombre: str, fecha: str, prioridad: str,
+                      sync_calendar: bool = False) -> None:
         """
-        Agrega una nueva tarea al sistema con validaciones.
+        Agrega una nueva tarea al sistema.
 
         Args:
             nombre: Nombre de la tarea
-            fecha_entrega: Fecha en formato YYYY-MM-DD
+            fecha: Fecha en formato YYYY-MM-DD
             prioridad: Prioridad (alta, media, baja)
+            sync_calendar: Si es True, sincroniza con Google Calendar
 
         Raises:
             ValueError: Si alguna validación falla
         """
-        # Validar fecha
-        if not self.validar_fecha(fecha_entrega):
-            raise ValueError("La fecha debe tener el formato YYYY-MM-DD (ejemplo: 2024-12-31)")
+        # Validaciones
+        if not nombre or not nombre.strip():
+            raise ValueError("El nombre de la tarea no puede estar vacío")
 
-        # Validar prioridad
+        if not self.validar_fecha(fecha):
+            raise ValueError("La fecha debe tener el formato YYYY-MM-DD (ej: 2024-12-31)")
+
         if not self.validar_prioridad(prioridad):
             raise ValueError('La prioridad debe ser "alta", "media" o "baja"')
 
-        # Crear y agregar la tarea
-        nueva_tarea = Tarea(nombre, fecha_entrega, prioridad)
-        self._tareas.append(nueva_tarea)
-        print(f"\n✅ Tarea agregada exitosamente: '{nombre}'")
+        # Crear tarea
+        tarea = Tarea(nombre.strip(), fecha, prioridad.lower())
 
-    def ver_todas_tareas(self) -> None:
+        # Sincronizar con Google Calendar si se solicita
+        if sync_calendar:
+            if not self._calendar.autenticado:
+                print("\n⚠️  Debes autenticar con Google Calendar primero (opción 8)")
+            else:
+                event_id = self._calendar.crear_evento(tarea)
+                if event_id:
+                    tarea.set_google_event_id(event_id)
+
+        self._tareas.append(tarea)
+        self.guardar_tareas()
+        Colores.print_colored(f"\n✅ Tarea agregada: '{nombre}'", Colores.GREEN)
+
+    def ver_tareas(self, filtro: str = "todas") -> None:
         """
-        Muestra todas las tareas numeradas con sus datos completos.
+        Muestra las tareas con opción de filtrado.
+
+        Args:
+            filtro: Tipo de filtro ("todas", "pendientes", "completadas",
+                   "alta", "media", "baja")
         """
-        if not self._tareas:
-            print("\n📭 No hay tareas registradas.")
+        tareas_mostrar = self._tareas
+
+        # Aplicar filtros
+        if filtro == "pendientes":
+            tareas_mostrar = [t for t in self._tareas if t.get_estado() == "pendiente"]
+        elif filtro == "completadas":
+            tareas_mostrar = [t for t in self._tareas if t.get_estado() == "completada"]
+        elif filtro in ["alta", "media", "baja"]:
+            tareas_mostrar = [t for t in self._tareas if t.get_prioridad() == filtro]
+
+        if not tareas_mostrar:
+            print(f"\n📭 No hay tareas {filtro}.")
             return
 
-        print("\n" + "=" * 50)
-        print("📋 LISTA DE TAREAS")
-        print("=" * 50)
+        print("\n" + "=" * 60)
+        print(f"📋 LISTA DE TAREAS ({filtro.upper()})")
+        print("=" * 60)
 
-        for i, tarea in enumerate(self._tareas, 1):
-            print(f"\n[{i}]")
+        for i, tarea in enumerate(tareas_mostrar, 1):
+            # Encontrar índice real en la lista completa
+            idx_real = self._tareas.index(tarea) + 1
+            print(f"\n[{idx_real}]")
             print(tarea)
-            print("-" * 40)
+            print("-" * 50)
 
-    def marcar_completada(self, numero_tarea: int) -> None:
+        print(f"\nTotal mostradas: {len(tareas_mostrar)}")
+
+    def marcar_completada(self, numero: int) -> None:
         """
         Marca una tarea como completada.
 
         Args:
-            numero_tarea: Número de la tarea (1-based)
+            numero: Número de la tarea (1-based)
 
         Raises:
             ValueError: Si el número de tarea no existe
         """
-        if not self.validar_indice_tarea(numero_tarea):
-            raise ValueError(f"La tarea #{numero_tarea} no existe. Hay {len(self._tareas)} tarea(s).")
+        if not self.validar_indice(numero):
+            raise ValueError(f"La tarea #{numero} no existe. Hay {len(self._tareas)} tarea(s).")
 
-        tarea = self._tareas[numero_tarea - 1]
+        tarea = self._tareas[numero - 1]
 
         if tarea.get_estado() == "completada":
             print(f"\n⚠️  La tarea '{tarea.get_nombre()}' ya está completada.")
         else:
             tarea.set_estado("completada")
-            print(f"\n✅ Tarea '{tarea.get_nombre()}' marcada como completada.")
+            self.guardar_tareas()
+            Colores.print_colored(f"\n✅ Tarea '{tarea.get_nombre()}' marcada como completada", Colores.GREEN)
 
-    def eliminar_tarea(self, numero_tarea: int) -> None:
+    def eliminar_tarea(self, numero: int) -> None:
         """
         Elimina una tarea del sistema.
 
         Args:
-            numero_tarea: Número de la tarea a eliminar (1-based)
+            numero: Número de la tarea a eliminar (1-based)
 
         Raises:
             ValueError: Si el número de tarea no existe
         """
-        if not self.validar_indice_tarea(numero_tarea):
-            raise ValueError(f"La tarea #{numero_tarea} no existe. Hay {len(self._tareas)} tarea(s).")
+        if not self.validar_indice(numero):
+            raise ValueError(f"La tarea #{numero} no existe. Hay {len(self._tareas)} tarea(s).")
 
-        tarea_eliminada = self._tareas.pop(numero_tarea - 1)
-        print(f"\n🗑️  Tarea '{tarea_eliminada.get_nombre()}' eliminada exitosamente.")
+        tarea = self._tareas[numero - 1]
 
-    # -------------------------------------------------------------------------
-    # FUNCIONALIDADES DE CONSULTA Y ESTADÍSTICAS
-    # -------------------------------------------------------------------------
-    def ver_tareas_ordenadas(self) -> None:
-        """
-        Muestra las tareas ordenadas por fecha de entrega
-        (de más próxima a más lejana).
-        """
+        # Eliminar de Google Calendar si tiene evento asociado
+        if tarea.get_google_event_id():
+            self._calendar.eliminar_evento(tarea.get_google_event_id())
+
+        nombre = tarea.get_nombre()
+        del self._tareas[numero - 1]
+        self.guardar_tareas()
+        Colores.print_colored(f"\n🗑️  Tarea '{nombre}' eliminada", Colores.GREEN)
+
+    def ordenar_por_fecha(self) -> None:
+        """Ordena las tareas por fecha de entrega (más próxima primero)."""
         if not self._tareas:
-            print("\n📭 No hay tareas registradas.")
+            print("\n📭 No hay tareas para ordenar.")
             return
 
-        # Ordenar tareas por fecha de entrega
-        tareas_ordenadas = sorted(self._tareas, key=lambda t: t.get_fecha_entrega())
+        self._tareas.sort(key=lambda t: t.get_fecha_entrega())
+        self.guardar_tareas()
+        Colores.print_colored("\n✅ Tareas ordenadas por fecha de entrega", Colores.GREEN)
+        self.ver_tareas("todas")
 
-        print("\n" + "=" * 50)
-        print("📅 TAREAS ORDENADAS POR FECHA DE ENTREGA")
-        print("=" * 50)
+    def buscar_tareas(self, termino: str) -> List[Tarea]:
+        """
+        Busca tareas por nombre (búsqueda parcial, case-insensitive).
 
-        for i, tarea in enumerate(tareas_ordenadas, 1):
-            dias_restantes = self._calcular_dias_restantes(tarea.get_fecha_entrega())
-            indicador_fecha = self._indicador_dias(dias_restantes, tarea.get_estado())
+        Args:
+            termino: Término de búsqueda
 
-            print(f"\n[{i}] {indicador_fecha}")
-            print(tarea)
-            print(f"   ⏰ Días restantes: {dias_restantes}")
-            print("-" * 40)
+        Returns:
+            Lista de tareas que coinciden
+        """
+        termino_lower = termino.lower()
+        return [t for t in self._tareas if termino_lower in t.get_nombre().lower()]
 
+    # -------------------------------------------------------------------------
+    # ALERTAS Y ESTADÍSTICAS
+    # -------------------------------------------------------------------------
     def mostrar_alertas(self) -> None:
-        """
-        Muestra alertas de tareas próximas a vencer (en 3 días o menos)
-        y tareas vencidas pendientes.
-        """
-        if not self._tareas:
-            return  # No hay tareas, no mostrar nada
-
+        """Muestra alertas de tareas próximas a vencer o vencidas."""
         hoy = datetime.now().date()
-        tareas_alerta = []
+        alertas = []
 
         for tarea in self._tareas:
             if tarea.get_estado() == "pendiente":
-                fecha_entrega = datetime.strptime(tarea.get_fecha_entrega(), "%Y-%m-%d").date()
-                dias_restantes = (fecha_entrega - hoy).days
+                fecha = datetime.strptime(tarea.get_fecha_entrega(), "%Y-%m-%d").date()
+                dias = (fecha - hoy).days
 
-                if dias_restantes <= 3:  # Vence en 3 días o ya venció
-                    tareas_alerta.append((tarea, dias_restantes))
+                if dias <= 3:
+                    alertas.append((tarea, dias))
 
-        if tareas_alerta:
+        if alertas:
             print("\n" + "🚨" * 25)
-            print("⚠️  ALERTAS DE TAREAS URGENTES")
+            Colores.print_colored("⚠️  ALERTAS DE TAREAS URGENTES", Colores.YELLOW)
             print("🚨" * 25)
 
-            for tarea, dias in tareas_alerta:
+            for tarea, dias in sorted(alertas, key=lambda x: x[1]):
                 if dias < 0:
                     mensaje = f"🔴 VENCIDA hace {abs(dias)} día(s)"
+                    color = Colores.RED
                 elif dias == 0:
                     mensaje = "🔴 VENCE HOY"
+                    color = Colores.RED
                 elif dias == 1:
                     mensaje = "🟠 Vence mañana"
+                    color = Colores.YELLOW
                 else:
                     mensaje = f"🟡 Vence en {dias} días"
+                    color = Colores.CYAN
 
                 print(f"\n   • {tarea.get_nombre()}")
-                print(f"     {mensaje} (Fecha límite: {tarea.get_fecha_entrega()})")
-
-            print("\n" + "🚨" * 25)
+                Colores.print_colored(f"     {mensaje} ({tarea.get_fecha_entrega()})", color)
+        else:
+            Colores.print_colored("\n✅ No hay alertas. ¡Todo en orden!", Colores.GREEN)
 
     def verificar_alertas_inicio(self) -> None:
-        """
-        Verifica y muestra alertas al iniciar el programa.
-        Muestra conteo de tareas urgentes y vencidas.
-        """
+        """Verifica y muestra alertas al iniciar el programa."""
         if not self._tareas:
             return
 
@@ -396,311 +622,281 @@ class SistemaTareas:
 
         for tarea in self._tareas:
             if tarea.get_estado() == "pendiente":
-                fecha_entrega = datetime.strptime(tarea.get_fecha_entrega(), "%Y-%m-%d").date()
-                dias_restantes = (fecha_entrega - hoy).days
+                fecha = datetime.strptime(tarea.get_fecha_entrega(), "%Y-%m-%d").date()
+                dias = (fecha - hoy).days
 
-                if dias_restantes < 0:
+                if dias < 0:
                     vencidas += 1
-                elif dias_restantes <= 3:
+                elif dias <= 3:
                     proximas += 1
 
         if vencidas > 0 or proximas > 0:
             print("\n" + "⚠️" * 20)
-            print("   🔔 NOTIFICACIONES AL INICIAR:")
-
+            print("   🔔 NOTIFICACIONES:")
             if vencidas > 0:
-                print(f"   🔴 Tienes {vencidas} tarea(s) VENCIDA(S) pendiente(s)!")
-
+                Colores.print_colored(f"   🔴 {vencidas} tarea(s) VENCIDA(S)!", Colores.RED)
             if proximas > 0:
-                print(f"   🟡 Tienes {proximas} tarea(s) que vencen en los próximos 3 días.")
-
+                Colores.print_colored(f"   🟡 {proximas} tarea(s) próximas a vencer", Colores.YELLOW)
             print("⚠️" * 20)
-            print("\nUsa la opción 6 del menú para ver los detalles.")
 
     def ver_estadisticas(self) -> None:
-        """
-        Muestra estadísticas del sistema: totales, completadas, pendientes
-        y porcentaje de productividad.
-        """
+        """Muestra estadísticas del sistema."""
         total = len(self._tareas)
 
         if total == 0:
-            print("\n📊 No hay tareas registradas para generar estadísticas.")
+            print("\n📊 No hay tareas para estadísticas.")
             return
 
         completadas = sum(1 for t in self._tareas if t.get_estado() == "completada")
         pendientes = total - completadas
-
-        # Calcular porcentaje de productividad
         productividad = (completadas / total) * 100
 
-        # Determinar emoji de productividad
-        if productividad >= 80:
-            emoji_prod = "🌟"
-        elif productividad >= 50:
-            emoji_prod = "👍"
-        elif productividad >= 25:
-            emoji_prod = "📈"
-        else:
-            emoji_prod = "💪"
-
-        # Contar por prioridad
-        prioridad_alta = sum(1 for t in self._tareas if t.get_prioridad() == "alta")
-        prioridad_media = sum(1 for t in self._tareas if t.get_prioridad() == "media")
-        prioridad_baja = sum(1 for t in self._tareas if t.get_prioridad() == "baja")
+        prioridades = {
+            'alta': sum(1 for t in self._tareas if t.get_prioridad() == 'alta'),
+            'media': sum(1 for t in self._tareas if t.get_prioridad() == 'media'),
+            'baja': sum(1 for t in self._tareas if t.get_prioridad() == 'baja')
+        }
 
         print("\n" + "=" * 50)
-        print("📊 ESTADÍSTICAS DEL SISTEMA")
+        Colores.print_colored("📊 ESTADÍSTICAS DEL SISTEMA", Colores.CYAN)
         print("=" * 50)
-        print(f"\n   📁 Total de tareas:     {total}")
-        print(f"   ✅ Completadas:         {completadas}")
-        print(f"   ⏳ Pendientes:          {pendientes}")
-        print(f"\n   {emoji_prod} Productividad:       {productividad:.1f}%")
-        print(f"\n   🔴 Prioridad Alta:      {prioridad_alta}")
-        print(f"   🟡 Prioridad Media:     {prioridad_media}")
-        print(f"   🟢 Prioridad Baja:      {prioridad_baja}")
+        print(f"   📁 Total de tareas:      {total}")
+        Colores.print_colored(f"   ✅ Completadas:          {completadas}", Colores.GREEN)
+        Colores.print_colored(f"   ⏳ Pendientes:           {pendientes}", Colores.YELLOW)
+
+        # Barra de productividad
+        barra = "█" * int(productividad / 5) + "░" * (20 - int(productividad / 5))
+        color_prod = Colores.GREEN if productividad >= 70 else Colores.YELLOW if productividad >= 40 else Colores.RED
+        print(f"\n   📈 Productividad:        {productividad:.1f}%")
+        Colores.print_colored(f"   [{barra}]", color_prod)
+
+        print(f"\n   🔴 Prioridad Alta:       {prioridades['alta']}")
+        print(f"   🟡 Prioridad Media:      {prioridades['media']}")
+        print(f"   🟢 Prioridad Baja:       {prioridades['baja']}")
         print("=" * 50)
 
     # -------------------------------------------------------------------------
-    # MÉTODOS AUXILIARES
+    # GOOGLE CALENDAR
     # -------------------------------------------------------------------------
-    def _calcular_dias_restantes(self, fecha_str: str) -> int:
-        """
-        Calcula los días restantes hasta una fecha.
+    def autenticar_google_calendar(self) -> bool:
+        """Autentica con Google Calendar."""
+        return self._calendar.autenticar()
 
-        Args:
-            fecha_str: Fecha en formato YYYY-MM-DD
+    def sincronizar_todas_con_calendar(self) -> None:
+        """Sincroniza todas las tareas pendientes con Google Calendar."""
+        if not self._calendar.autenticado:
+            Colores.print_colored("\n❌ Debes autenticar con Google Calendar primero (opción 8)", Colores.RED)
+            return
 
-        Returns:
-            Número de días (negativo si ya pasó)
-        """
-        hoy = datetime.now().date()
-        fecha = datetime.strptime(fecha_str, "%Y-%m-%d").date()
-        return (fecha - hoy).days
+        tareas_pendientes = [t for t in self._tareas
+                            if t.get_estado() == "pendiente" and not t.get_google_event_id()]
 
-    def _indicador_dias(self, dias: int, estado: str) -> str:
-        """
-        Genera un indicador visual según los días restantes.
+        if not tareas_pendientes:
+            print("\n📭 No hay tareas pendientes para sincronizar.")
+            return
 
-        Args:
-            dias: Días restantes (puede ser negativo)
-            estado: Estado de la tarea
+        print(f"\n🔄 Sincronizando {len(tareas_pendientes)} tarea(s)...")
 
-        Returns:
-            String con indicador visual
-        """
-        if estado == "completada":
-            return "✅"
-        elif dias < 0:
-            return "🔴 VENCIDA"
-        elif dias == 0:
-            return "🔴 HOY"
-        elif dias <= 3:
-            return "🟡 URGENTE"
-        elif dias <= 7:
-            return "🟠 PRÓXIMA"
-        else:
-            return "🟢 A TIEMPO"
+        sincronizadas = 0
+        for tarea in tareas_pendientes:
+            event_id = self._calendar.crear_evento(tarea)
+            if event_id:
+                tarea.set_google_event_id(event_id)
+                sincronizadas += 1
+
+        self.guardar_tareas()
+        Colores.print_colored(f"✅ {sincronizadas} tarea(s) sincronizada(s) con Google Calendar", Colores.GREEN)
 
 
 # =============================================================================
-# INTERFAZ DE USUARIO (MENÚ PRINCIPAL)
+# INTERFAZ DE USUARIO (MENÚ)
 # =============================================================================
-def mostrar_menu() -> None:
+def mostrar_banner():
+    """Muestra el banner de bienvenida."""
+    banner = """
+    ╔══════════════════════════════════════════════════════════╗
+    ║                                                          ║
+    ║        📚 SISTEMA ACADÉMICO DE TAREAS 📚                 ║
+    ║              con Google Calendar Sync                    ║
+    ║                                                          ║
+    ╚══════════════════════════════════════════════════════════╝
     """
-    Muestra el menú principal del sistema.
-    """
-    print("\n" + "=" * 50)
-    print("📚 SISTEMA ACADÉMICO DE ADMINISTRACIÓN DE TAREAS")
-    print("=" * 50)
-    print("\n   [1] ➕ Agregar nueva tarea")
-    print("   [2] 📋 Ver todas las tareas")
-    print("   [3] ✔️  Marcar tarea como completada")
-    print("   [4] 🗑️  Eliminar tarea")
-    print("   [5] 📅 Ver tareas ordenadas por fecha")
-    print("   [6] 🚨 Mostrar alertas de vencimiento")
-    print("   [7] 📊 Ver estadísticas")
-    print("   [8] 🚪 Salir")
-    print("\n" + "=" * 50)
+    Colores.print_colored(banner, Colores.CYAN)
 
 
-def solicitar_opcion() -> int:
-    """
-    Solicita y valida la opción del menú.
+def mostrar_menu():
+    """Muestra el menú principal."""
+    print("\n" + "=" * 60)
+    Colores.print_colored("📋 MENÚ PRINCIPAL", Colores.CYAN)
+    print("=" * 60)
+    print("""
+   [1] ➕  Agregar nueva tarea
+   [2] 📋 Ver todas las tareas
+   [3] ✔️   Marcar tarea como completada
+   [4] 🗑️   Eliminar tarea
+   [5] 📅 Ordenar tareas por fecha
+   [6] 🚨 Mostrar alertas de vencimiento
+   [7] 📊 Ver estadísticas
+   [8] 📅 Sincronizar con Google Calendar
+   [9] 🚪 Salir y guardar
+    """)
+    print("=" * 60)
 
-    Returns:
-        Número entero de la opción seleccionada
-    """
+
+def submenu_filtros(sistema: SistemaAcademico):
+    """Submenú para filtros de tareas."""
     while True:
+        print("\n" + "-" * 40)
+        print("🔍 FILTRAR TAREAS")
+        print("-" * 40)
+        print("   [1] Todas")
+        print("   [2] Pendientes")
+        print("   [3] Completadas")
+        print("   [4] Prioridad Alta")
+        print("   [5] Prioridad Media")
+        print("   [6] Prioridad Baja")
+        print("   [7] Buscar por nombre")
+        print("   [0] Volver al menú principal")
+
         try:
-            opcion = input("\n👉 Seleccione una opción (1-8): ").strip()
-            opcion_int = int(opcion)
+            opcion = input("\n👉 Opción: ").strip()
 
-            if 1 <= opcion_int <= 8:
-                return opcion_int
-            else:
-                print("❌ Error: La opción debe estar entre 1 y 8.")
-
-        except ValueError:
-            print("❌ Error: Debe ingresar un número entero válido.")
-
-
-def solicitar_datos_tarea(sistema: SistemaTareas) -> tuple:
-    """
-    Solicita los datos para una nueva tarea.
-
-    Args:
-        sistema: Instancia del sistema de tareas
-
-    Returns:
-        Tupla con (nombre, fecha, prioridad)
-    """
-    print("\n" + "-" * 40)
-    print("➕ AGREGAR NUEVA TAREA")
-    print("-" * 40)
-
-    # Solicitar nombre
-    nombre = input("\n📝 Nombre de la tarea: ").strip()
-    while not nombre:
-        print("❌ El nombre no puede estar vacío.")
-        nombre = input("📝 Nombre de la tarea: ").strip()
-
-    # Solicitar fecha
-    fecha = input("📅 Fecha de entrega (YYYY-MM-DD): ").strip()
-
-    # Solicitar prioridad
-    print("\n🏷️  Prioridades disponibles:")
-    print("   🔴 alta")
-    print("   🟡 media")
-    print("   🟢 baja")
-    prioridad = input("\nSeleccione prioridad: ").strip()
-
-    return nombre, fecha, prioridad
-
-
-def solicitar_numero_tarea(operacion: str) -> int:
-    """
-    Solicita el número de una tarea.
-
-    Args:
-        operacion: Descripción de la operación (para mostrar al usuario)
-
-    Returns:
-        Número de tarea seleccionado
-    """
-    while True:
-        try:
-            numero = input(f"\n👉 Número de tarea a {operacion}: ").strip()
-            return int(numero)
-        except ValueError:
-            print("❌ Error: Debe ingresar un número entero válido.")
-
-
-def ejecutar_opcion(sistema: SistemaTareas, opcion: int) -> bool:
-    """
-    Ejecuta la acción correspondiente a la opción seleccionada.
-
-    Args:
-        sistema: Instancia del sistema de tareas
-        opcion: Número de opción seleccionada
-
-    Returns:
-        False si debe salir del programa, True en caso contrario
-    """
-    try:
-        if opcion == 1:  # Agregar tarea
-            nombre, fecha, prioridad = solicitar_datos_tarea(sistema)
-            sistema.agregar_tarea(nombre, fecha, prioridad)
-
-        elif opcion == 2:  # Ver todas
-            sistema.ver_todas_tareas()
-
-        elif opcion == 3:  # Marcar completada
-            if not sistema._tareas:
-                print("\n📭 No hay tareas para marcar.")
-                return True
-
-            sistema.ver_todas_tareas()
-            numero = solicitar_numero_tarea("completar")
-            sistema.marcar_completada(numero)
-
-        elif opcion == 4:  # Eliminar
-            if not sistema._tareas:
-                print("\n📭 No hay tareas para eliminar.")
-                return True
-
-            sistema.ver_todas_tareas()
-            numero = solicitar_numero_tarea("eliminar")
-
-            # Confirmar eliminación
-            if 1 <= numero <= len(sistema._tareas):
-                tarea = sistema._tareas[numero - 1]
-                confirmar = input(f"\n⚠️  ¿Seguro que desea eliminar '{tarea.get_nombre()}'? (s/n): ").strip().lower()
-                if confirmar == 's':
-                    sistema.eliminar_tarea(numero)
+            if opcion == "1":
+                sistema.ver_tareas("todas")
+            elif opcion == "2":
+                sistema.ver_tareas("pendientes")
+            elif opcion == "3":
+                sistema.ver_tareas("completadas")
+            elif opcion == "4":
+                sistema.ver_tareas("alta")
+            elif opcion == "5":
+                sistema.ver_tareas("media")
+            elif opcion == "6":
+                sistema.ver_tareas("baja")
+            elif opcion == "7":
+                termino = input("\n🔍 Término de búsqueda: ").strip()
+                resultados = sistema.buscar_tareas(termino)
+                if resultados:
+                    print(f"\n✅ Se encontraron {len(resultados)} resultado(s):")
+                    for t in resultados:
+                        print(f"\n[{sistema._tareas.index(t) + 1}]")
+                        print(t)
                 else:
-                    print("\n✖️  Operación cancelada.")
+                    print("\n❌ No se encontraron tareas.")
+            elif opcion == "0":
+                break
             else:
-                sistema.eliminar_tarea(numero)  # Esto lanzará el error de validación
+                print("❌ Opción inválida")
 
-        elif opcion == 5:  # Ver ordenadas
-            sistema.ver_tareas_ordenadas()
-
-        elif opcion == 6:  # Mostrar alertas
-            sistema.mostrar_alertas()
-
-        elif opcion == 7:  # Estadísticas
-            sistema.ver_estadisticas()
-
-        elif opcion == 8:  # Salir
-            print("\n💾 Guardando tareas...")
-            sistema.guardar_tareas()
-            print("✅ ¡Hasta luego!")
-            return False
-
-    except ValueError as e:
-        print(f"\n❌ Error de validación: {e}")
-    except Exception as e:
-        print(f"\n❌ Error inesperado: {e}")
-
-    return True
+        except Exception as e:
+            Colores.print_colored(f"❌ Error: {e}", Colores.RED)
 
 
-# =============================================================================
-# FUNCIÓN PRINCIPAL
-# =============================================================================
 def main():
-    """
-    Función principal que inicia el sistema.
-    """
-    # Limpiar pantalla (compatible con Google Colab y terminal)
+    """Función principal del sistema."""
+    # Limpiar pantalla (compatible con Colab)
     try:
-        from IPython import get_ipython
-        if get_ipython() is not None:
-            from IPython.display import clear_output
-            clear_output(wait=True)
-        else:
-            os.system('cls' if os.name == 'nt' else 'clear')
+        from IPython.display import clear_output
+        clear_output(wait=True)
     except:
         pass
 
-    print("\n" + "🎓" * 25)
-    print("   BIENVENIDO AL SISTEMA ACADÉMICO")
-    print("   DE ADMINISTRACIÓN DE TAREAS")
-    print("🎓" * 25)
+    mostrar_banner()
 
-    # Crear instancia del sistema (carga automáticamente las tareas)
-    sistema = SistemaTareas()
+    # Crear instancia del sistema
+    sistema = SistemaAcademico()
 
     # Mostrar alertas al iniciar
     sistema.verificar_alertas_inicio()
 
-    # Bucle principal del menú
-    continuar = True
-    while continuar:
+    # Bucle principal
+    ejecutando = True
+    while ejecutando:
         mostrar_menu()
-        opcion = solicitar_opcion()
-        continuar = ejecutar_opcion(sistema, opcion)
+
+        try:
+            opcion = input("\n👉 Seleccione una opción (1-9): ").strip()
+
+            if opcion == "1":  # Agregar tarea
+                print("\n" + "-" * 40)
+                Colores.print_colored("➕ AGREGAR NUEVA TAREA", Colores.CYAN)
+                print("-" * 40)
+
+                nombre = input("\n📝 Nombre de la tarea: ").strip()
+                fecha = input("📅 Fecha de entrega (YYYY-MM-DD): ").strip()
+                print("\n🏷️  Prioridades disponibles:")
+                print("   🔴 alta | 🟡 media | 🟢 baja")
+                prioridad = input("👉 Prioridad: ").strip()
+
+                sync = input("\n¿Sincronizar con Google Calendar? (s/n): ").strip().lower() == 's'
+
+                sistema.agregar_tarea(nombre, fecha, prioridad, sync)
+
+            elif opcion == "2":  # Ver tareas
+                submenu_filtros(sistema)
+
+            elif opcion == "3":  # Marcar completada
+                sistema.ver_tareas("todas")
+                if sistema._tareas:
+                    try:
+                        num = int(input("\n👉 Número de tarea a completar: "))
+                        sistema.marcar_completada(num)
+                    except ValueError:
+                        print("❌ Debes ingresar un número válido")
+
+            elif opcion == "4":  # Eliminar tarea
+                sistema.ver_tareas("todas")
+                if sistema._tareas:
+                    try:
+                        num = int(input("\n👉 Número de tarea a eliminar: "))
+                        confirmar = input(f"⚠️  ¿Estás seguro? (s/n): ").strip().lower()
+                        if confirmar == 's':
+                            sistema.eliminar_tarea(num)
+                    except ValueError:
+                        print("❌ Debes ingresar un número válido")
+
+            elif opcion == "5":  # Ordenar por fecha
+                sistema.ordenar_por_fecha()
+
+            elif opcion == "6":  # Mostrar alertas
+                sistema.mostrar_alertas()
+
+            elif opcion == "7":  # Estadísticas
+                sistema.ver_estadisticas()
+
+            elif opcion == "8":  # Sincronizar con Google Calendar
+                print("\n" + "-" * 40)
+                Colores.print_colored("📅 GOOGLE CALENDAR SYNC", Colores.CYAN)
+                print("-" * 40)
+                print("\n   [1] 🔐 Autenticar con Google")
+                print("   [2] 🔄 Sincronizar todas las tareas pendientes")
+
+                subopcion = input("\n👉 Opción: ").strip()
+
+                if subopcion == "1":
+                    sistema.autenticar_google_calendar()
+                elif subopcion == "2":
+                    sistema.sincronizar_todas_con_calendar()
+                else:
+                    print("❌ Opción inválida")
+
+            elif opcion == "9":  # Salir
+                print("\n💾 Guardando tareas...")
+                sistema.guardar_tareas()
+                Colores.print_colored("\n✅ ¡Hasta luego! 👋", Colores.GREEN)
+                ejecutando = False
+
+            else:
+                Colores.print_colored("\n❌ Opción inválida. Usa 1-9.", Colores.RED)
+
+        except ValueError as e:
+            Colores.print_colored(f"\n❌ Error: {e}", Colores.RED)
+        except KeyboardInterrupt:
+            print("\n\n⚠️  Interrupción detectada. Guardando...")
+            sistema.guardar_tareas()
+            break
+        except Exception as e:
+            Colores.print_colored(f"\n❌ Error inesperado: {e}", Colores.RED)
 
 
 # =============================================================================
