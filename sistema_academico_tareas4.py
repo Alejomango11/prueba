@@ -215,28 +215,47 @@ class Tarea:
 
 
 # =============================================================================
-# INTEGRACIÓN CON GOOGLE CALENDAR
+# INTEGRACIÓN CON GOOGLE CALENDAR - VERSIÓN CORREGIDA PARA COLAB
 # =============================================================================
 class GoogleCalendarSync:
     """
     Gestiona la sincronización de tareas con Google Calendar.
-
-    Permite crear, actualizar y eliminar eventos en Google Calendar
-    asociados a las tareas del sistema.
+    VERSIÓN CORREGIDA: Maneja automáticamente los scopes necesarios.
     """
 
     # Scopes necesarios para Google Calendar
     SCOPES = ['https://www.googleapis.com/auth/calendar']
+    TOKEN_FILE = '/content/token_calendar.pickle'
 
     def __init__(self):
         """Inicializa el gestor de sincronización."""
         self.service = None
         self.autenticado = False
+        self.creds = None
 
-    def autenticar(self) -> bool:
+    def _limpiar_credenciales_previas(self):
+        """Limpia credenciales previas para forzar re-autenticación con scopes correctos."""
+        import shutil
+        # Limpiar credenciales de Colab
+        colab_creds_path = '/content/.config'
+        if os.path.exists(colab_creds_path):
+            try:
+                shutil.rmtree(colab_creds_path)
+            except:
+                pass
+        # Limpiar token pickle si existe
+        if os.path.exists(self.TOKEN_FILE):
+            try:
+                os.remove(self.TOKEN_FILE)
+            except:
+                pass
+
+    def autenticar(self, forzar_reautenticacion: bool = False) -> bool:
         """
-        Autentica con Google Calendar usando las credenciales de Colab.
-        Solicita los permisos necesarios (scopes) para crear/modificar eventos.
+        Autentica con Google Calendar. Intenta múltiples métodos hasta conseguir los scopes necesarios.
+
+        Args:
+            forzar_reautenticacion: Si es True, borra credenciales previas y fuerza nueva autenticación
 
         Returns:
             True si la autenticación fue exitosa, False en caso contrario
@@ -248,97 +267,96 @@ class GoogleCalendarSync:
             return False
 
         try:
-            Colores.print_colored("\n🔐 Autenticando con Google Calendar...", Colores.CYAN)
-            print("   Necesitas conceder permisos para modificar tu calendario.\n")
+            Colores.print_colored("\n🔐 Iniciando autenticación con Google Calendar...", Colores.CYAN)
 
-            # Importar librerías adicionales para autenticación con scopes
-            from google_auth_oauthlib.flow import InstalledAppFlow
+            # Si hay error previo de permisos, forzar re-autenticación
+            if forzar_reautenticacion:
+                self._limpiar_credenciales_previas()
+                Colores.print_colored("   ℹ️  Credenciales previas limpiadas. Se solicitará nueva autenticación.", Colores.YELLOW)
 
-            # Intentar obtener credenciales con los scopes de Calendar
-            # Primero intentamos con default() que es más directo en Colab
+            # MÉTODO 1: Intentar usar credenciales existentes con scopes de Calendar
+            try:
+                from google.auth import default
+                creds, project = default(scopes=self.SCOPES)
+                if creds and self._verificar_scopes(creds):
+                    self.service = build('calendar', 'v3', credentials=creds)
+                    self.autenticado = True
+                    self.creds = creds
+                    Colores.print_colored("✅ Autenticación exitosa (método automático)", Colores.GREEN)
+                    return True
+            except Exception as e:
+                pass
+
+            # MÉTODO 2: Autenticación interactiva con auth.authenticate_user() + re-configuración
+            Colores.print_colored("\n📱 Se requiere autorización manual...", Colores.YELLOW)
+            print("   Se abrirá una ventana de autenticación.")
+            print("   ⚠️  IMPORTANTE: Asegúrate de seleccionar TODOS los permisos solicitados.\n")
+
+            # Usar el método de Colab pero luego obtener credenciales con scopes específicos
+            auth.authenticate_user()
+
+            # Después de autenticar, intentar obtener credenciales con los scopes de Calendar
             try:
                 creds, project = default(scopes=self.SCOPES)
-            except Exception:
-                creds = None
+                if creds and self._verificar_scopes(creds):
+                    self.service = build('calendar', 'v3', credentials=creds)
+                    self.autenticado = True
+                    self.creds = creds
+                    Colores.print_colored("✅ ¡Autenticación exitosa!", Colores.GREEN)
+                    return True
+            except:
+                pass
 
-            # Si no hay credenciales o no tienen los scopes necesarios, iniciar flujo OAuth
-            if not creds or not creds.valid:
-                if creds and creds.expired and creds.refresh_token:
-                    try:
-                        creds.refresh(Request())
-                    except Exception:
-                        creds = None
+            # Si llegamos aquí, no se pudieron obtener los scopes necesarios
+            Colores.print_colored("\n⚠️  No se pudieron obtener los permisos de Calendar automáticamente.", Colores.YELLOW)
+            print("\n" + "="*60)
+            Colores.print_colored("SOLUCIÓN MANUAL (Copia y pega en una celda separada):", Colores.CYAN)
+            print("="*60)
+            print("""
+# Celda 1: Autenticación con Calendar
+from google.colab import auth
+from google.auth import default
+from googleapiclient.discovery import build
 
-                if not creds:
-                    # En Colab, necesitamos usar un flujo diferente
-                    # Creamos un cliente OAuth temporal
-                    Colores.print_colored("⚠️  Se requiere autorización manual.", Colores.YELLOW)
-                    print("\n📋 PASOS PARA AUTENTICAR:")
-                    print("   1. Ve a: https://console.cloud.google.com/")
-                    print("   2. Crea un proyecto y habilita Google Calendar API")
-                    print("   3. Ve a 'APIs y servicios' → 'Credenciales'")
-                    print("   4. Crea credenciales OAuth 2.0 (tipo 'Aplicación de escritorio')")
-                    print("   5. Descarga el archivo JSON de credenciales")
-                    print("   6. Sube el archivo aquí a Colab")
-                    print("\n   O usa el método alternativo (recomendado):")
-                    print("   Ejecuta el siguiente código en una celda separada:\n")
-                    print("   " + "="*60)
-                    print("   from google.colab import auth")
-                    print("   import os")
-                    print("   os.environ['GOOGLE_AUTH_SCOPES'] = 'https://www.googleapis.com/auth/calendar'")
-                    print("   auth.authenticate_user()")
-                    print("   " + "="*60)
-                    print("\n   Luego vuelve a ejecutar esta opción.")
-                    return False
+# Autenticar usuario
+auth.authenticate_user()
 
-            # Verificar si tenemos los scopes necesarios
-            if creds and creds.scopes:
-                has_calendar_scope = any('calendar' in scope for scope in creds.scopes)
-                if not has_calendar_scope:
-                    Colores.print_colored("\n⚠️  Las credenciales no tienen permisos de Calendar.", Colores.YELLOW)
-                    print("   Los scopes actuales son:", creds.scopes)
-                    print("\n   Para solucionarlo, ejecuta en una celda separada:\n")
-                    print("   " + "="*60)
-                    print("   !pip install -q google-auth-oauthlib")
-                    print("   from google_auth_oauthlib.flow import InstalledAppFlow")
-                    print("   from google.auth.transport.requests import Request")
-                    print("   ")
-                    print("   SCOPES = ['https://www.googleapis.com/auth/calendar']")
-                    print("   flow = InstalledAppFlow.from_client_secrets_file(")
-                    print("       'client_secret.json',  # Tu archivo de credenciales")
-                    print("       SCOPES)")
-                    print("   creds = flow.run_local_server(port=0)")
-                    print("   print('Autenticado correctamente')")
-                    print("   " + "="*60)
-                    return False
+# Obtener credenciales específicas para Calendar
+creds, _ = default(scopes=['https://www.googleapis.com/auth/calendar'])
 
-            self.service = build('calendar', 'v3', credentials=creds)
-            self.autenticado = True
-            Colores.print_colored("✅ ¡Autenticación exitosa!", Colores.GREEN)
-            print("   Ahora puedes crear y sincronizar eventos con Google Calendar.")
-            return True
+# Verificar que funcione
+service = build('calendar', 'v3', credentials=creds)
+calendars = service.calendarList().list().execute()
+print(f"✅ Autenticado. Calendarios encontrados: {len(calendars.get('items', []))}")
+""")
+            print("="*60)
+            print("\nDespués de ejecutar la celda anterior, vuelve a intentar")
+            print("agregar una tarea con sincronización de Calendar.\n")
+
+            return False
 
         except Exception as e:
             Colores.print_colored(f"\n❌ Error de autenticación: {e}", Colores.RED)
-            print("\n⚠️  Si el error persiste, verifica que:")
-            print("   1. Has habilitado Google Calendar API en tu proyecto de Google Cloud")
-            print("   2. Concediste los permisos de 'Ver y editar eventos' en el calendario")
-            print("   3. Has revocado accesos previos en: https://myaccount.google.com/permissions")
-            print("\n   MÉTODO ALTERNATIVO:")
-            print("   Ejecuta esto en una celda ANTES de usar el sistema:\n")
-            print("   " + "="*60)
-            print("   from google.colab import auth")
-            print("   from google.auth import default")
-            print("   from googleapiclient.discovery import build")
-            print("   import os")
-            print("   ")
-            print("   # Forzar autenticación con scopes de Calendar")
-            print("   auth.authenticate_user()")
-            print("   creds, _ = default(scopes=['https://www.googleapis.com/auth/calendar'])")
-            print("   service = build('calendar', 'v3', credentials=creds)")
-            print("   print('✅ Autenticado con Calendar API')")
-            print("   " + "="*60)
             return False
+
+    def _verificar_scopes(self, creds) -> bool:
+        """Verifica si las credenciales tienen los scopes necesarios."""
+        if not creds or not hasattr(creds, 'scopes') or not creds.scopes:
+            return False
+        return any('calendar' in scope for scope in creds.scopes)
+
+    def verificar_y_reautenticar(self) -> bool:
+        """
+        Verifica si las credenciales actuales tienen permisos de Calendar.
+        Si no, fuerza una re-autenticación.
+        """
+        if self.autenticado and self.creds:
+            if self._verificar_scopes(self.creds):
+                return True
+
+        # No tiene scopes necesarios, re-autenticar
+        Colores.print_colored("\n⚠️  Permisos insuficientes detectados.", Colores.YELLOW)
+        return self.autenticar(forzar_reautenticacion=True)
 
     def crear_evento(self, tarea: Tarea) -> Optional[str]:
         """
@@ -388,8 +406,32 @@ class GoogleCalendarSync:
             return resultado.get('id')
 
         except HttpError as e:
-            Colores.print_colored(f"❌ Error al crear evento: {e}", Colores.RED)
-            return None
+            error_str = str(e)
+            # Detectar error de permisos insuficientes
+            if '403' in error_str or 'insufficientPermissions' in error_str or 'Insufficient Permission' in error_str:
+                Colores.print_colored("\n⚠️  Error de permisos detectado. Intentando re-autenticar...", Colores.YELLOW)
+
+                # Intentar re-autenticar con forzado
+                if self.verificar_y_reautenticar():
+                    # Re-intentar crear el evento
+                    try:
+                        resultado = self.service.events().insert(calendarId='primary', body=evento).execute()
+                        Colores.print_colored(f"✅ Evento creado en Google Calendar (después de re-autenticar)", Colores.GREEN)
+                        return resultado.get('id')
+                    except Exception as e2:
+                        Colores.print_colored(f"❌ Error al crear evento después de re-autenticar: {e2}", Colores.RED)
+                        return None
+                else:
+                    Colores.print_colored("❌ No se pudo re-autenticar automáticamente.", Colores.RED)
+                    print("\n   Usa el método manual:")
+                    print("   1. Ejecuta en una celda separada:")
+                    print("      from google.colab import auth; from google.auth import default")
+                    print("      auth.authenticate_user(); creds, _ = default(scopes=['https://www.googleapis.com/auth/calendar'])")
+                    print("   2. Luego vuelve a intentar agregar la tarea")
+                    return None
+            else:
+                Colores.print_colored(f"❌ Error al crear evento: {e}", Colores.RED)
+                return None
         except Exception as e:
             Colores.print_colored(f"❌ Error inesperado: {e}", Colores.RED)
             return None
