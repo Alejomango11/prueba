@@ -223,6 +223,9 @@ class GoogleCalendarSync:
     asociados a las tareas del sistema.
     """
 
+    # Scopes necesarios para Google Calendar
+    SCOPES = ['https://www.googleapis.com/auth/calendar']
+
     def __init__(self):
         """Inicializa el gestor de sincronización."""
         self.service = None
@@ -231,6 +234,7 @@ class GoogleCalendarSync:
     def autenticar(self) -> bool:
         """
         Autentica con Google Calendar usando las credenciales de Colab.
+        Solicita los permisos necesarios (scopes) para crear/modificar eventos.
 
         Returns:
             True si la autenticación fue exitosa, False en caso contrario
@@ -243,14 +247,22 @@ class GoogleCalendarSync:
 
         try:
             Colores.print_colored("\n🔐 Autenticando con Google Calendar...", Colores.CYAN)
-            auth.authenticate_user()
-            creds, _ = default()
+            print("   Se abrirá un enlace para autorizar el acceso.")
+            print("   Asegúrate de conceder permisos para modificar tu calendario.\n")
+
+            # Autenticar con los scopes específicos de Calendar
+            auth.authenticate_user(scopes=self.SCOPES)
+            creds, _ = default(scopes=self.SCOPES)
             self.service = build('calendar', 'v3', credentials=creds)
             self.autenticado = True
             Colores.print_colored("✅ ¡Autenticación exitosa!", Colores.GREEN)
+            print("   Ahora puedes crear y sincronizar eventos con Google Calendar.")
             return True
         except Exception as e:
             Colores.print_colored(f"\n❌ Error de autenticación: {e}", Colores.RED)
+            print("\n⚠️  Si el error persiste, verifica que:")
+            print("   1. Has habilitado Google Calendar API en tu proyecto de Google Cloud")
+            print("   2. Concediste los permisos de 'Ver y editar eventos' en el calendario")
             return False
 
     def crear_evento(self, tarea: Tarea) -> Optional[str]:

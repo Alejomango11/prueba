@@ -59,15 +59,62 @@ exec(open('sistema_academico_tareas.py').read())
 
 ## 📅 Integración con Google Calendar
 
-### Configuración
-La primera vez que uses la sincronización:
+### 🔧 Configuración Requerida (IMPORTANTE)
 
-1. Selecciona la **opción 8** del menú
+Para usar la sincronización con Google Calendar, debes habilitar la API en tu cuenta de Google:
+
+#### Paso 1: Habilitar Google Calendar API
+1. Ve a [Google Cloud Console](https://console.cloud.google.com/)
+2. Crea un nuevo proyecto (o selecciona uno existente)
+3. Ve a **"APIs y servicios" → "Biblioteca"**
+4. Busca **"Google Calendar API"** y haz clic en **"Habilitar"**
+
+#### Paso 2: Configurar Pantalla de Consentimiento OAuth
+1. Ve a **"APIs y servicios" → "Pantalla de consentimiento OAuth"**
+2. Selecciona **"Externo"** (o Interno si tienes Google Workspace)
+3. Completa la información requerida:
+   - Nombre de la app: "Sistema Académico de Tareas"
+   - Correo de soporte: tu correo
+   - Dominio: (dejar vacío para uso personal)
+   - Información de contacto del desarrollador: tu correo
+4. Guarda y continúa
+
+#### Paso 3: Agregar Alcances (Scopes)
+1. En la pantalla de consentimiento, ve a la pestaña **"Alcances"** (Scopes)
+2. Haz clic en **"Agregar o quitar alcances"**
+3. Busca y selecciona:
+   - `../auth/calendar` - "Ver y editar eventos en tu calendario"
+4. Guarda los cambios
+
+#### Paso 4: Agregar Usuario de Prueba
+1. Ve a la pestaña **"Usuarios de prueba"**
+2. Haz clic en **"Agregar usuarios"**
+3. Ingresa tu correo de Gmail
+4. Guarda los cambios
+
+### 🚀 Uso en la Aplicación
+
+Una vez configurado:
+
+1. En el sistema, selecciona la **opción 8** del menú
 2. Elige **"Autenticar con Google"**
 3. Se abrirá un enlace de autorización
-4. Inicia sesión con tu cuenta de Google
-5. Copia el código de autorización y pégalo en Colab
-6. ¡Listo! Tus credenciales se guardarán para futuras sesiones
+4. Inicia sesión con tu cuenta de Google (debe ser la que agregaste como usuario de prueba)
+5. **IMPORTANTE**: Asegúrate de conceder los permisos para **"Ver y editar eventos"** en tu calendario
+6. Copia el código de autorización y pégalo en Colab
+7. ¡Listo! Ahora puedes sincronizar tareas
+
+### ⚠️ Solución de Errores Comunes
+
+#### Error: "Request had insufficient authentication scopes"
+**Solución**: La autenticación no incluyó los permisos de Calendar. Debes:
+1. Ir a [Configuración de cuenta Google](https://myaccount.google.com/permissions)
+2. Buscar "Google Colab" o "Python" y revocar el acceso
+3. Volver a autenticar en el sistema (opción 8)
+4. Asegurarte de marcar la casilla de permisos de Calendar
+
+#### Error: "Google Calendar API has not been used in project"
+**Solución**: Ve a Google Cloud Console y habilita Google Calendar API (ver Paso 1 arriba)
 
 ### ¿Qué se sincroniza?
 - ✅ Eventos de **todo el día** en tu calendario principal

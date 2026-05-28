@@ -8,7 +8,9 @@
       "Bash(git commit -m 'Agrega Sistema Académico de Administración de Tareas completo *)",
       "Bash(git push *)",
       "Bash(git commit -m 'Agrega aplicación web con integración Google Calendar *)",
-      "Bash(git commit -m 'Sistema Académico de Administración de Tareas v2.0 *)"
+      "Bash(git commit -m 'Sistema Académico de Administración de Tareas v2.0 *)",
+      "Bash(gh --version)",
+      "Bash(curl *)"
     ]
   }
 }
